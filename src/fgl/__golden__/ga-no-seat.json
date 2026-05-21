@@ -1,0 +1,14 @@
+{
+  "event_name": "DJ Night",
+  "venue_name": "Club Foo",
+  "city": "Toronto",
+  "state": "ON",
+  "event_date_long": "Friday, August 1, 2026",
+  "event_time": "10:00 PM",
+  "admission_type": "General Admission",
+  "price": "25.00",
+  "event_code": "SF-DJN-26",
+  "order_id": "SF-10987",
+  "qr_payload": "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOiJBQkMifQ.SIG",
+  "print_timestamp": "2026-08-01T22:00:00.000Z"
+}

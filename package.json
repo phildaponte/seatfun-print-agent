@@ -1,0 +1,29 @@
+{
+  "name": "seatfun-print-agent",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local desktop agent that bridges the Seatfun dashboard to a BOCA Systems Lemur thermal ticket printer.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "smoke": "tsx scripts/smoke-print.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
