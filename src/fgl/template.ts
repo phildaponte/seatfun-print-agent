@@ -3,6 +3,7 @@ import {
   font,
   qr,
   sanitizeText,
+  toAscii,
   assertQrSafe,
   PRINT,
   RenderError,
@@ -37,33 +38,59 @@ function validate(data: TicketRenderData): void {
 export function renderTicket(data: TicketRenderData): string {
   validate(data);
 
-  const t = (v: string | undefined) => sanitizeText(v);
+  // sanitizeText strips '<' and '>' so they cannot break the FGL parser.
+  // toAscii strips diacritics so multi-byte UTF-8 sequences don't print as garbage
+  // on FGL46 firmwares that only understand single-byte ASCII (default Lemur-S).
+  const t = (v: string | undefined) => toAscii(sanitizeText(v));
   const hasSeatInfo = Boolean(data.seat || data.row);
+
+  // Layout assumes a 2" × 5.5" tear-stock fed PORTRAIT on a Lemur-S:
+  //   - rows go 0..~1100 (the 5.5" feed-direction axis, leading edge prints first)
+  //   - cols go 0..~400  (the 2" head axis)
+  // The self-test reports "PRINT WIDTH 960" but that's the printer's MAX head
+  // width across all stocks; our 2" stock only uses cols 0..~400 of that.
+  // Confirmed empirically on 2026-05-21 (round 3 print): col 650 placed the QR
+  // off the stock and silently dropped it. All content stays within col 0..400.
 
   const parts: string[] = [];
 
+  // ── Header ───────────────────────────────────────────────────────────
   parts.push(rc(10, 20) + font(6) + t(data.event_name));
-  parts.push(rc(60, 20) + font(2) + `${t(data.venue_name)} — ${t(data.city)}, ${t(data.state)}`);
-  parts.push(rc(90, 20) + font(4) + `${t(data.event_date_long)}     ${t(data.event_time)}`);
+  parts.push(rc(110, 20) + font(2) + `${t(data.venue_name)} - ${t(data.city)}, ${t(data.state)}`);
+  // Font 3 is reliable across FGL46 firmware revisions; font 4 has lowercase
+  // glitches on some Lemur-S units (observed 2026-05-21).
+  parts.push(rc(150, 20) + font(3) + `${t(data.event_date_long)}   ${t(data.event_time)}`);
 
+  // ── Seating / admission ──────────────────────────────────────────────
   if (hasSeatInfo) {
     parts.push(
-      rc(130, 20) +
-        font(2) +
-        `SECTION ${t(data.section)}   ROW ${t(data.row)}   SEAT ${t(data.seat)}`,
+      rc(210, 20) +
+        font(3) +
+        `SEC ${t(data.section)}  ROW ${t(data.row)}  SEAT ${t(data.seat)}`,
     );
-    parts.push(rc(130, 300) + font(2) + t(data.admission_type));
+    parts.push(rc(260, 20) + font(2) + t(data.admission_type));
   } else {
-    parts.push(rc(130, 20) + font(2) + t(data.admission_type));
+    parts.push(rc(210, 20) + font(3) + t(data.admission_type));
   }
 
-  parts.push(rc(170, 20) + font(2) + `$${t(data.price)}    EVENT CODE: ${t(data.event_code)}`);
-  parts.push(rc(200, 20) + qr(8, data.qr_payload));
+  // ── Price + event code ───────────────────────────────────────────────
+  parts.push(rc(310, 20) + font(2) + `$${t(data.price)}    CODE: ${t(data.event_code)}`);
+
+  // ── QR code ──────────────────────────────────────────────────────────
+  // Module size 8 × ~21 modules = ~170 dots wide on a ~400-wide stock,
+  // so col 100 leaves ~130 dots of margin on each side. <QR> close tag is
+  // required by FGL46 or the QR command is silently dropped.
+  parts.push(rc(400, 100) + qr(8, data.qr_payload));
+
+  // ── Footer ───────────────────────────────────────────────────────────
+  // Pushed past the QR (which ends ~row 570) but well within the safe
+  // print zone observed on the round 3 ticket.
   parts.push(
-    rc(380, 20) +
+    rc(700, 20) +
       font(1) +
-      `Order ${t(data.order_id)}  •  Printed ${t(data.print_timestamp)}`,
+      `Order ${t(data.order_id)}  *  Printed ${t(data.print_timestamp)}`,
   );
+
   parts.push(PRINT);
 
   return parts.join("");

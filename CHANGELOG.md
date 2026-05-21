@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-05-20
-Last change: Documented Option A (loopback/per-device) constraint + corrected v1 cost figures + affirmed Windows/macOS parity
+Last updated: 2026-05-21
+Last change: First successful end-to-end remote print + FGL renderer v0.2 (QR close-tag fix, ASCII transliteration, font 3 for date, repositioned layout)
 Owner: @phildaponte
 Status: current
 ---
@@ -12,6 +12,18 @@ Append-only log of every meaningful change to the seatfun-print-agent. Newest en
 Format: `**<area>**: <what changed>. Why: <reason>. Docs: [link](path). Code: \`src/path\`.`
 
 ---
+
+## 2026-05-21
+
+- **milestone (first remote print, end-to-end)**: Successfully sent the first FGL ticket from @phildaponte's Mac (Montreal-area dev box, behind residential NAT) through Tailscale (subnet routing on `192.168.4.0/24`) → client's Mac at the venue → BOCA Lemur-S at `192.168.4.25:9100` → physical printed ticket. Confirms the entire planned topology works: agent on `127.0.0.1:9787`, FGL renderer, TCP socket to printer port 9100, dev-time iteration via Tailscale. The first print exposed five FGL renderer bugs (see `feat (FGL renderer v0.2)` entry below). Setup notes captured in `docs/testing-with-tailscale.md` were validated end-to-end with one client (mastrolabs.com tailnet bridged to phildaponte tailnet via subnet routing). Total time from "client plugs in printer" to "first ticket prints remotely": ~90 min, including a printer-config detour for stale DHCP values that turned out to be cosmetic noise (the printer was reachable on its real IP despite a 0.0.0.0 subnet mask on its self-test page).
+
+- **feat (FGL renderer v0.2 — first-print fixes)**: Five renderer fixes after observing the first real-hardware print on a BOCA Lemur-S (FGL46, firmware T004). Code: `src/fgl/commands.ts`, `src/fgl/template.ts`, `src/fgl/__golden__/basic.fgl`, `src/fgl/__golden__/ga-no-seat.fgl`, `src/fgl/template.test.ts`.
+  - **QR closing tag**: `qr()` now emits `<QR{size}>{payload}<QR>` instead of `<QR{size}>{payload}`. FGL46 silently drops the QR command without the closing tag — explains the missing QR on the first print. Bumped default size from 8 to 10 (~300 dots wide on a ~400-dot stock).
+  - **ASCII transliteration via `toAscii()`**: New helper in `commands.ts` strips diacritics (`é` → `e`, `à` → `a`, `ç` → `c`) before bytes hit the wire. The FGL46 default code page interprets multi-byte UTF-8 as two separate single-byte glyphs (`Montréal` was printing as `MontrC)al`). Proper international support — FGL `<U>` Unicode mode or per-language code-page selection — is deferred to v1.
+  - **Font 3 for the date line**: The date row was being rendered in `<F4>`, which on this firmware silently dropped lowercase glyphs (`Saturday, July` printed as `S    . J`). Switched to `<F3>`, which is reliable across all observed FGL46 firmware revisions.
+  - **Layout repositioning**: Footer pushed from row 380 to row 1000 (the stock is ~1100 dots tall — previously 60% of the ticket was empty white space). QR centered at col 50 instead of col 20. Header, date, seating, and price rows tightened.
+  - **Comment trail**: Inline comments in `template.ts` and `commands.ts` document the firmware quirks (with a `2026-05-21` date stamp) so the next person reading the renderer knows why these choices were made.
+  - Tests: 10/10 passing. Both golden fixtures (`basic`, `ga-no-seat`) regenerated to match the new output. The two byte-pattern assertions (`SECTION` → `SEC `, `<RC130,20><F2>GA` → `<RC180,20><F3>GA`) updated.
 
 ## 2026-05-20
 

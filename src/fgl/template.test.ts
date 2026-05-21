@@ -75,12 +75,12 @@ describe("renderTicket — validation", () => {
 
   it("omits SECTION/ROW/SEAT line when seat info absent", () => {
     const out = renderTicket(valid);
-    expect(out).not.toContain("SECTION");
-    expect(out).toContain("<RC130,20><F2>GA");
+    expect(out).not.toContain("SEC ");
+    expect(out).toContain("<RC210,20><F3>GA");
   });
 
   it("includes SECTION/ROW/SEAT line when seat present", () => {
     const out = renderTicket({ ...valid, section: "A", row: "1", seat: "5" });
-    expect(out).toContain("SECTION A   ROW 1   SEAT 5");
+    expect(out).toContain("SEC A  ROW 1  SEAT 5");
   });
 });

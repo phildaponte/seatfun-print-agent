@@ -9,7 +9,29 @@ export function font(size: FontSize): string {
 }
 
 export function qr(size: number, payload: string): string {
-  return `<QR${size}>${payload}`;
+  // BOCA FGL46 requires a closing <QR> tag; without it the printer silently drops the command.
+  return `<QR${size}>${payload}<QR>`;
+}
+
+/**
+ * Strips diacritics so accented characters print on FGL46 firmwares that only
+ * understand single-byte ASCII (default Lemur-S behaviour).
+ *
+ * Examples: "Montréal" -> "Montreal", "à" -> "a", "ç" -> "c".
+ *
+ * v1 will replace this with proper code-page selection (FGL <U> / <C> commands)
+ * so accented characters render correctly.
+ */
+export function toAscii(input: string | undefined | null): string {
+  if (input == null) return "";
+  return String(input)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Catch a few common ligatures / dashes that NFD doesn't decompose.
+    .replace(/[—–]/g, "-")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[•·]/g, "*");
 }
 
 export function logo(slot: number): string {

@@ -12,6 +12,6 @@
   "price": "40.00",
   "event_code": "SF-SUMFEST-26",
   "order_id": "SF-10428",
-  "qr_payload": "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOiIxNzE2MDAweDc4OSJ9.SIGNATURE",
+  "qr_payload": "https://seatfun.com",
   "print_timestamp": "2026-05-20T22:30:00.000Z"
 }
