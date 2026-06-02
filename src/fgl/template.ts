@@ -2,6 +2,7 @@ import {
   rc,
   font,
   qr,
+  qrv,
   sanitizeText,
   toAscii,
   assertQrSafe,
@@ -13,8 +14,6 @@ import type { TicketRenderData } from "./types.js";
 const REQUIRED_FIELDS: Array<keyof TicketRenderData> = [
   "event_name",
   "venue_name",
-  "city",
-  "state",
   "event_date_long",
   "event_time",
   "admission_type",
@@ -77,10 +76,11 @@ export function renderTicket(data: TicketRenderData): string {
   parts.push(rc(310, 20) + font(2) + `$${t(data.price)}    CODE: ${t(data.event_code)}`);
 
   // ── QR code ──────────────────────────────────────────────────────────
-  // Module size 8 × ~21 modules = ~170 dots wide on a ~400-wide stock,
-  // so col 100 leaves ~130 dots of margin on each side. <QR> close tag is
-  // required by FGL46 or the QR command is silently dropped.
-  parts.push(rc(400, 100) + qr(8, data.qr_payload));
+  // Module size 8 × ~21 modules = ~170 dots wide on a ~400-wide stock.
+  // Moved to row 350, col 150 for better centering.
+  // QRV7 sets QR version to 7 (default density, up to 178 alphanumeric chars).
+  parts.push(qrv(7));
+  parts.push(rc(350, 150) + qr(8, data.qr_payload));
 
   // ── Footer ───────────────────────────────────────────────────────────
   // Pushed past the QR (which ends ~row 570) but well within the safe

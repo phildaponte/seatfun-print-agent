@@ -3,33 +3,60 @@ import { randomUUID } from "node:crypto";
 import type { AgentConfig } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { PrinterClient } from "../printer/client.js";
+import type { PrinterProbe } from "../printer/probe.js";
+import type { PairingState } from "../pairing/state.js";
 import { handleHealth } from "./routes/health.js";
 import { handlePrint } from "./routes/print.js";
+import { handleStatus } from "./routes/status.js";
+import { handleTestPrint } from "./routes/test-print.js";
+import { handlePair } from "./routes/pair.js";
 import { verifyBearer } from "./middleware/auth.js";
+import { applyCorsHeaders, handlePreflight, type CorsConfig } from "./middleware/cors.js";
 
 export interface ServerDeps {
   config: AgentConfig;
   logger: Logger;
   printer: PrinterClient | null;
+  probe: PrinterProbe;
+  pairing: PairingState;
+  cors: CorsConfig;
+  startedAt: number;
 }
 
-const PROTECTED_ROUTES = new Set<string>(["POST /v1/print"]);
+/**
+ * Route map. `auth: true` means the bearer is required (verified against the pairing
+ * state's stored token). `/v1/pair` does its own auth (it accepts whatever bearer is
+ * pasted in and stores it), so it's marked `auth: false` here.
+ */
+const ROUTES: Array<{ key: string; auth: boolean }> = [
+  { key: "GET /v1/health", auth: false },
+  { key: "POST /v1/pair", auth: false },
+  { key: "GET /v1/status", auth: true },
+  { key: "POST /v1/print", auth: true },
+  { key: "POST /v1/test-print", auth: true },
+];
 
 export function createServer(deps: ServerDeps): http.Server {
-  const { config, logger } = deps;
+  const { logger, pairing, cors } = deps;
 
   return http.createServer(async (req, res) => {
     const requestId = randomUUID();
     const route = `${req.method ?? "GET"} ${(req.url ?? "/").split("?")[0]}`;
     const start = Date.now();
 
+    // CORS preflight short-circuits everything else.
+    if (handlePreflight(cors, req, res)) {
+      logger.debug("preflight", { request_id: requestId, route, origin: req.headers["origin"] });
+      return;
+    }
+    applyCorsHeaders(cors, req, res);
+
     const sendJson = (status: number, body: unknown): void => {
       const payload = JSON.stringify(body);
-      res.writeHead(status, {
-        "content-type": "application/json; charset=utf-8",
-        "content-length": Buffer.byteLength(payload, "utf8"),
-        "x-request-id": requestId,
-      });
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("content-length", Buffer.byteLength(payload, "utf8"));
+      res.setHeader("x-request-id", requestId);
+      res.writeHead(status);
       res.end(payload);
       logger.info("request", {
         request_id: requestId,
@@ -44,25 +71,38 @@ export function createServer(deps: ServerDeps): http.Server {
     };
 
     try {
-      if (PROTECTED_ROUTES.has(route)) {
-        const auth = verifyBearer(req, config.token);
+      const entry = ROUTES.find((r) => r.key === route);
+      if (!entry) {
+        sendError(404, "not_found", `Unknown route: ${route}`);
+        return;
+      }
+      if (entry.auth) {
+        const auth = verifyBearer(req, pairing.getCachedToken());
         if (!auth.ok) {
           sendError(401, auth.error!.code, auth.error!.message);
           return;
         }
       }
 
-      if (route === "GET /v1/health") {
-        await handleHealth(deps, sendJson);
-        return;
+      switch (route) {
+        case "GET /v1/health":
+          await handleHealth(deps, sendJson);
+          return;
+        case "POST /v1/pair":
+          await handlePair(deps, req, sendJson, sendError, requestId);
+          return;
+        case "GET /v1/status":
+          await handleStatus(deps, sendJson);
+          return;
+        case "POST /v1/print":
+          await handlePrint(deps, req, sendJson, sendError, requestId);
+          return;
+        case "POST /v1/test-print":
+          await handleTestPrint(deps, sendJson, sendError, requestId);
+          return;
+        default:
+          sendError(404, "not_found", `Unknown route: ${route}`);
       }
-
-      if (route === "POST /v1/print") {
-        await handlePrint(deps, req, sendJson, sendError, requestId);
-        return;
-      }
-
-      sendError(404, "not_found", `Unknown route: ${route}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error("unhandled", { request_id: requestId, route, error: msg });

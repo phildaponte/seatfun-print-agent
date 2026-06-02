@@ -9,8 +9,13 @@ export function font(size: FontSize): string {
 }
 
 export function qr(size: number, payload: string): string {
-  // BOCA FGL46 requires a closing <QR> tag; without it the printer silently drops the command.
-  return `<QR${size}>${payload}<QR>`;
+  // BOCA FGL46 requires curly braces around the payload.
+  return `<QR${size}>{${payload}}`;
+}
+
+export function qrv(version: 2 | 7 | 11 | 15): string {
+  // Set QR version density. Version 7 is default, version 2 is less dense.
+  return `<QRV${version}>`;
 }
 
 /**

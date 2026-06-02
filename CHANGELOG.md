@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-05-21
-Last change: First successful end-to-end remote print + FGL renderer v0.2 (QR close-tag fix, ASCII transliteration, font 3 for date, repositioned layout)
+Last updated: 2026-06-02
+Last change: /v1/health exposes a non-secret `device` block so the dashboard fetches the bearer matching this machine's agent (multi-station fix)
 Owner: @phildaponte
 Status: current
 ---
@@ -12,6 +12,42 @@ Append-only log of every meaningful change to the seatfun-print-agent. Newest en
 Format: `**<area>**: <what changed>. Why: <reason>. Docs: [link](path). Code: \`src/path\`.`
 
 ---
+
+## 2026-06-02
+
+- **feat (/v1/health `device` block)**: `GET /v1/health` now returns a non-secret `device` block `{ device_id, organizer_id, device_name }` sourced from `pairing.getMetadata()` (fields `null` when unpaired). The bearer token is **not** exposed — only public identifiers. Why: printing is loopback (browser → `127.0.0.1` → the agent on the same computer), so when an organizer pairs multiple box-office stations, the dashboard must fetch the token of the agent running on *this* machine, not "the latest device in the org". The dashboard reads `device.device_id` from health and scopes its `agent-token` lookup to it. Without this, only the most-recently-paired station could print (all others got 401). The agent already persisted `device_id` at pair time (`src/pairing/state.ts`), so this is purely a surfacing change. `npm run lint` clean. Docs: [docs/protocol.md § GET /v1/health](./docs/protocol.md). Code: `src/server/routes/health.ts`. Paired dashboard change: `seatfun-dashboard` `src/app/dashboard/events/[id]/box-office/page.tsx`, `src/lib/types.ts`.
+
+## 2026-05-22
+
+- **feat (v1-lite agent surface — agent v0.1.0)**: Brought the agent up to the minimum surface needed for the dashboard's box-office page to drive it end-to-end without `npm run smoke`. Shipped as one coherent change with `protocol.md` updated to match the wire it actually serves. Why: the FGL renderer is "good enough" (QR-clipping bug parked); the next bottleneck on real box-office usability is dashboard → agent plumbing.
+
+  - **CORS + cross-origin auth path**. New `src/server/middleware/cors.ts`. Allow-list from `SEATFUN_ALLOWED_ORIGINS` (CSV, default `https://app.seatfun.com,http://localhost:3000`). Echoes the exact origin (never `*`, because requests carry `Authorization`), emits `Vary: Origin`, allows `Authorization, Content-Type` headers and `GET, POST, OPTIONS` methods, 600 s preflight cache. `OPTIONS` preflights short-circuit before auth runs. Unknown origins are still served (so curl works) but with no CORS headers, which is enough for the browser to block the response. Verified with curl preflight checks against `https://app.seatfun.com` and `https://evil.example`. Mixed-content (https → http://127.0.0.1) is **not** blocked by modern browsers because loopback is a "potentially trustworthy origin" — no relay needed. Documented in [`docs/protocol.md → CORS + cross-origin auth`](./docs/protocol.md). Code: `src/server/middleware/cors.ts`, `src/server/http.ts`, `src/config.ts`.
+
+  - **Bearer-in-browser-memory pattern**. The dashboard fetches the device's bearer from `GET /api/box-office/agent-token` (session-gated, on Vercel), holds it in React state, includes it on every agent call, never persists. Documented as the v1-lite auth path in [`docs/protocol.md → CORS + cross-origin auth`](./docs/protocol.md). Implementation lives in the dashboard repo, scheduled for the next session.
+
+  - **Pairing handshake (`POST /v1/pair`)**. New route `src/server/routes/pair.ts` + pairing state in `src/pairing/state.ts` + secret storage in `src/pairing/keychain.ts`. v1-lite trust model: the dashboard mints the long-lived bearer (via Bubble) and the browser POSTs it to the agent with the token already in the `Authorization` header; the agent trusts the pasted token and persists it. Bubble-side callback verification is a tracked TODO for v1.0. macOS uses the system `security` CLI (`add-/find-/delete-generic-password`) under service `com.seatfun.print-agent` — **no `keytar` native module** to keep installs friction-free; Linux falls back to chmod-600 JSON under `$XDG_CONFIG_HOME/seatfun-print-agent/secret.json`; Windows uses the same file fallback under `%LOCALAPPDATA%` (proper Credential Manager support is a v1.0 TODO). Non-secret metadata (`device_id`, `organizer_id`, `organizer_name`, `device_name`, `paired_at`) is stored alongside the keychain entry in a chmod-600 `pairing.json`. Token fingerprint (`sha256:<first 16 hex>`) is returned + logged but the token itself is never logged. Docs: [`docs/protocol.md → POST /v1/pair`](./docs/protocol.md), [`docs/architecture.md → src/pairing/`](./docs/architecture.md). Code: `src/pairing/state.ts`, `src/pairing/keychain.ts`, `src/server/routes/pair.ts`.
+
+  - **Heartbeat / status endpoints**. Extended `GET /v1/health` to return the full protocol shape including `paired` (driven by pairing state) and `printer.reachable` (driven by the background probe). New auth'd `GET /v1/status` (`src/server/routes/status.ts`) returns the detailed shape — printer reachable/flags/serial/model/firmware (latter four are `null`/`false` for v1-lite until real BOCA status parsing lands), queue depth (always 0/0 — no queue yet), and `agent.uptime_seconds`. New background probe `src/printer/probe.ts` does a 2 s TCP-connect every 10 s and caches `{ reachable, last_status_at, last_error }` so health/status return in constant time no matter how often the dashboard polls. Verified with curl: status without auth → 401 `unauthorized`; with auth → 200 with the documented shape. Docs: [`docs/protocol.md → GET /v1/status`](./docs/protocol.md), [`docs/architecture.md → src/printer/`](./docs/architecture.md). Code: `src/printer/probe.ts`, `src/server/routes/status.ts`, `src/server/routes/health.ts`.
+
+  - **Outbound heartbeat scaffold**. New `src/pairing/heartbeat.ts` — periodic `POST` to `SEATFUN_HEARTBEAT_URL` with `{ agent_version, printer.reachable }` + bearer. **Disabled by default**; enabled only when the env var is set. On `401` the agent currently logs `heartbeat.revoked` but does not yet clear pairing (tracked TODO until the dashboard endpoint is real). Documented in [`docs/architecture.md → src/pairing/`](./docs/architecture.md).
+
+  - **`POST /v1/test-print`**. New auth'd route `src/server/routes/test-print.ts` — renders `fixtures/sample-job.json` through the same job runner as `/v1/print`, stamps a fresh `job_id` of the form `test_<unix-ms>`, returns the identical results shape. Used by the dashboard's "Test print" button.
+
+  - **Refactor — shared `runPrintJob`**. Pulled the print loop out of `src/server/routes/print.ts` into `src/server/jobs/runPrintJob.ts` so `/v1/print` and `/v1/test-print` share identical batch semantics (sequential render → TCP write → 50 ms gap → next; `STOP_BATCH_ON` set unchanged; `abort_on_first_error` unchanged). Drift-prevention: there is only one place that knows how to drive the printer through a job.
+
+  - **Auth middleware now talks to pairing state, not config**. `verifyBearer(req, expectedToken)` accepts `null` and returns a new `not_paired` error code so the dashboard can branch on the right CTA (vs the generic `unauthorized` it returns for bad/missing token). `SEATFUN_AGENT_TOKEN` env is now an **opt-in dev override** (not required to boot) and disables `/v1/pair` while set — keeps `npm run smoke` working unchanged while production paths flow through the keychain. Docs: [`docs/protocol.md → Error envelope`](./docs/protocol.md). Code: `src/server/middleware/auth.ts`, `src/config.ts`.
+
+  - **Boot flow**. `src/index.ts` now initializes pairing state, starts the printer probe, optionally starts the heartbeat, and tears all of them down on SIGINT/SIGTERM. Boot log includes `paired`, `secret_backend` (`macos-keychain` or `file`), `allowed_origins`, and `heartbeat_enabled` so the operator can verify the runtime posture at a glance.
+
+  - **Routing**. `src/server/http.ts` now uses a single declarative `ROUTES` table with per-route `auth` flags + a `switch` dispatch. Unknown routes return a structured `404 not_found` envelope. CORS middleware runs before auth; preflights short-circuit.
+
+  - **Out of scope** (unchanged from the session intent): FGL template polish (QR clipping fix), `/v1/cancel` (defer until queue exists), `/v1/printer/configure` (set via env), Windows-native keychain (file fallback for now), real BOCA status parsing (model/firmware/serial/flags still `null`/`false`).
+
+  - **Verification**: `npm run lint` (tsc --noEmit) clean. `npm test` 10/10 passing — golden fixtures unchanged because no renderer code moved. Manual end-to-end check with curl against a booted agent: `/v1/health`, `/v1/status` (with and without auth), `/v1/print` preflight from allowed origin (CORS headers present), `/v1/print` preflight from disallowed origin (no CORS headers), 404 envelope on unknown route — all behave as documented.
+
+  - **Bumped `agent_version`** from `0.0.1` to `0.1.0` (new endpoints + breaking change to auth posture: env token is no longer required).
+
+  - Docs: [docs/protocol.md](./docs/protocol.md), [docs/architecture.md](./docs/architecture.md). Code: `src/server/http.ts`, `src/server/middleware/cors.ts`, `src/server/middleware/auth.ts`, `src/server/routes/{health,pair,status,print,test-print}.ts`, `src/server/jobs/runPrintJob.ts`, `src/pairing/{state,keychain,heartbeat}.ts`, `src/printer/probe.ts`, `src/config.ts`, `src/index.ts`, `.env.example`.
 
 ## 2026-05-21
 

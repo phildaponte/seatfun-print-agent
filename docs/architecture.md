@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-05-20
-Last change: Made loopback-only / per-device constraint explicit (Option A); affirmed Windows/macOS parity for v1
+Last updated: 2026-05-22
+Last change: Documented v1-lite implementation — CORS middleware, printer probe, pairing/keychain, heartbeat scaffold, shared runPrintJob; macOS `security` CLI replaces keytar
 Owner: @phildaponte
 Status: draft
 ---
@@ -47,10 +47,12 @@ The agent is a **single Node process** (v0) or a **Tauri main process + webview*
 
 ### `src/server/`
 
-- `http.ts` — boot a Node `http.Server` bound to `127.0.0.1` only (never `0.0.0.0` — the agent must not be reachable from the LAN, only from the same machine).
-- `routes/` — one file per endpoint (`health.ts`, `print.ts`, `pair.ts`, `status.ts`). See `protocol.md` for the contract.
-- `middleware/auth.ts` — checks `Authorization: Bearer <token>` against the keychain-stored token. Constant-time compare. Strips the header from logs.
-- `middleware/logging.ts` — structured JSON logs, request id, redacts secrets.
+- `http.ts` — boots a Node `http.Server` bound to `127.0.0.1` only (never `0.0.0.0` — the agent must not be reachable from the LAN, only from the same machine). Holds the single route map (`ROUTES`) with per-route `auth` flags and dispatches via `switch`.
+- `routes/` — one file per endpoint (`health.ts`, `pair.ts`, `status.ts`, `print.ts`, `test-print.ts`). See `protocol.md` for the contract.
+- `jobs/runPrintJob.ts` — shared print-job runner used by both `/v1/print` and `/v1/test-print` so they share identical batch semantics (sequential render → TCP write → 50 ms gap → next).
+- `middleware/auth.ts` — `verifyBearer(req, expectedToken)` does a constant-time compare against the token in pairing state. Returns `not_paired` when no token has been stored yet so the dashboard can branch on the CTA.
+- `middleware/cors.ts` — origin allow-list + preflight handler. Echoes the exact `Origin` (never `*`, because `Authorization` is included) and emits `Vary: Origin`. Unknown origins get a response with no CORS headers, which is enough for the browser to block. See `protocol.md → CORS + cross-origin auth`.
+- `middleware/logging.ts` — structured JSON logs, request id, redacts secrets. (Currently inlined in `http.ts`; will graduate to its own file when there's a second consumer.)
 
 ### `src/fgl/` (will graduate to `@seatfun/fgl`)
 
@@ -63,17 +65,18 @@ The renderer is **pure**. Same input → same bytes. No clocks, no randomness, n
 
 ### `src/printer/`
 
-- `client.ts` — `class PrinterClient { connect(), printRaw(buf), getStatus(), close() }`. Wraps a `net.Socket` to `<ip>:9100`. Connect timeout 5s, write timeout 30s, retries on `ECONNRESET` once.
-- `status.ts` — parses BOCA status responses (paper out, head up, etc.) into a typed `PrinterStatus` object.
+- `client.ts` — `class PrinterClient { printRaw(fgl), ping() }`. Wraps a `net.Socket` to `<ip>:9100`. Connect timeout 5s, write timeout 30s.
+- `probe.ts` — `createPrinterProbe({ printer })` runs a 2s TCP-connect ping every 10s and caches `{ reachable, last_status_at, last_error }`. Both `/v1/health` and `/v1/status` read from this snapshot — dashboard polling (every 12s) never opens a new socket. Force-refresh available via `probe.refresh()` for future diagnostic UI.
+- `status.ts` (v1.0) — parses BOCA status responses (paper out, head up, etc.) into a typed `PrinterStatus` object. Currently the probe answers reachability only.
 - `discovery.ts` (v2) — mDNS scan for BOCA printers on the LAN.
 
 The printer client is **the only place** in the codebase that opens an outbound socket. Easy to audit, easy to mock in tests.
 
 ### `src/pairing/`
 
-- `flow.ts` — drives the pairing handshake described in the protocol doc.
-- `keychain.ts` — platform-aware token storage. Mac: `keytar`/Keychain Services. Windows: `keytar`/Credential Manager. Linux (dev only): plain file in `~/.config/seatfun-print-agent/` chmod 600.
-- `health.ts` — periodic `POST` to the dashboard's heartbeat endpoint to update `box_office_device.last_seen_at` and detect revocation. Default interval 60s; if the dashboard returns `401 device_revoked` the agent shows a red banner and refuses to print.
+- `state.ts` — `createPairingState({ envToken })` returns the in-memory holder for the bearer + metadata. `init()` reads token from the keychain (or env override) and metadata from the chmod-600 JSON sidecar file; `setPaired(token, meta)` persists both; `clear()` wipes both. The HTTP layer never touches the keychain directly — it goes through this state.
+- `keychain.ts` — platform-aware **secret-only** storage. macOS: shells out to `/usr/bin/security` (`add-/find-/delete-generic-password`) under service `com.seatfun.print-agent`, account `bearer-token`. No native module dependency, no `keytar` (eliminates a fragile build step). Linux: chmod-600 JSON file under `$XDG_CONFIG_HOME/seatfun-print-agent/secret.json`. Windows: same file fallback under `%LOCALAPPDATA%\SeatfunPrintAgent\` — proper Credential Manager support is a v1.0 TODO.
+- `heartbeat.ts` — periodic `POST` to the dashboard's heartbeat endpoint to update `box_office_device.last_seen_at` and detect revocation. Default interval 60s; if the dashboard returns `401 device_revoked` the agent will (TODO) clear pairing state and refuse to print. **v1-lite: disabled by default.** The dashboard polls `/v1/status` directly for the badge; outbound heartbeat is enabled only when `SEATFUN_HEARTBEAT_URL` is set.
 
 ### `src/queue/`
 
@@ -82,7 +85,14 @@ The printer client is **the only place** in the codebase that opens an outbound 
 
 ### `src/index.ts`
 
-- Loads config, starts HTTP server, starts heartbeat, registers SIGINT/SIGTERM handlers for graceful shutdown (drain the queue, close sockets, exit 0).
+Boot order:
+1. Load config (`config.ts`), create logger.
+2. Construct `PrinterClient` if `PRINTER_IP` set.
+3. `createPairingState({ envToken })` + `pairing.init()` to populate the in-memory token cache from the keychain (or env override).
+4. `createPrinterProbe({ printer })` + `probe.start()` to begin background reachability polling.
+5. Conditionally `createHeartbeat(...)` + `heartbeat.start()` if `SEATFUN_HEARTBEAT_URL` is set.
+6. `createServer({ config, logger, printer, probe, pairing, cors, startedAt })` and `server.listen(host, port)`.
+7. Register SIGINT/SIGTERM → `probe.stop()`, `heartbeat?.stop()`, `server.close()`, hard-exit after 5s.
 
 ## State
 
