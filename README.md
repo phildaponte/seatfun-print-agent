@@ -62,45 +62,48 @@ The agent registers a launch-on-login entry and runs in the background after ins
 
 ## First-run flow
 
-1. Open the agent. It prompts for the **printer IP** (printed on the BOCA self-test page — hold the TEST button ~3s).
-2. Click **Test print**. A test ticket comes out of the printer.
-3. In the dashboard go to **Settings → Box Office → Add device**. Copy the 6-digit pairing code.
-4. Paste the code into the agent → **Pair**. Agent stores a bearer token in the OS keychain.
-5. Done. Open the Box Office tab in the dashboard and print real tickets.
+1. **Install and launch** the app - a tray icon appears in your menu bar/system tray
+2. **Right-click the tray icon** → **Show Settings**
+3. **Enter printer IP** (printed on the BOCA self-test page — hold the TEST button ~3s)
+4. **Click "Save Settings"** - the agent will restart
+5. **In the dashboard** go to **Settings → Box Office → Add device** and copy the 6-digit pairing code
+6. **Paste the code** in the dashboard pairing flow - the agent stores the bearer token in the OS keychain
+7. **Done!** Open the Box Office tab in the dashboard and print tickets
 
-## Develop (v0)
+**Note:** The agent runs automatically on login after installation. Check the tray icon to view status or change settings.
 
-Requires **Node 20+**.
+## Develop
+
+Requires **Node 20+** and **Rust** (for Tauri).
 
 ```bash
 git clone git@github.com:phildaponte/seatfun-print-agent.git
 cd seatfun-print-agent
-npm install
-cp .env.example .env       # set SEATFUN_AGENT_TOKEN, PRINTER_IP, etc.
-npm run dev                # starts the agent on :9787 with hot reload (tsx watch)
+pnpm install
+cp .env.example .env       # set PRINTER_IP, etc.
+
+# Run in development mode (with hot reload)
+pnpm tauri dev
 ```
 
 Run the golden tests on the FGL renderer:
 
 ```bash
-npm test
+pnpm test
 ```
 
-Health check + smoke print from another terminal (replace `TOKEN` with the value of `SEATFUN_AGENT_TOKEN` from your `.env`):
+Health check (while app is running):
 
 ```bash
 curl http://127.0.0.1:9787/v1/health
-
-curl -X POST http://127.0.0.1:9787/v1/print \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @./fixtures/sample-job.json
 ```
 
-Real-hardware smoke test (bypasses the HTTP server, prints directly via TCP):
+Build for production:
 
 ```bash
-PRINTER_IP=192.168.1.47 npm run smoke
+pnpm tauri build
+# Output: src-tauri/target/release/bundle/dmg/*.dmg (macOS)
+#         src-tauri/target/release/bundle/nsis/*.exe (Windows)
 ```
 
 For the full wire format see [`docs/protocol.md`](./docs/protocol.md).
