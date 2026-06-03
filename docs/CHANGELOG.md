@@ -1,6 +1,6 @@
 ---
 Last updated: 2026-06-03
-Last change: Migrated tray windows from HTTP server to Tauri's native asset protocol
+Last change: Complete migration from Node.js to pure Rust HTTP server
 Owner: @phildaponte
 Status: current
 ---
@@ -8,6 +8,8 @@ Status: current
 # Changelog
 
 ## 2026-06-03
+
+- **Pure Rust HTTP server migration**: Completely replaced Node.js sidecar with native Rust HTTP server using Axum framework. Ported all 7 API endpoints (`/v1/health`, `/v1/status`, `/v1/pair`, `/v1/print`, `/v1/test-print`, `/v1/settings`), printer TCP client, FGL template rendering, and pairing/keychain logic to Rust. Removed all Node.js spawning code from `lib.rs`, removed Node.js/pnpm steps from GitHub Actions workflow, and removed `dist` bundling from `tauri.conf.json`. Why: **eliminates Node.js as a runtime dependency** - users now only need to download the app with no external dependencies. Faster startup, smaller bundle, better security with native keychain integration, simpler deployment. Docs: [tauri-architecture](./tauri-architecture.md). Code: `src-tauri/src/server/`, `src-tauri/src/lib.rs`, `.github/workflows/release.yml`, `src-tauri/tauri.conf.json`.
 
 - **CORS configuration for Tauri webviews**: Added `tauri://localhost` to default allowed origins in CORS configuration to enable tray windows to fetch from the HTTP server. Why: Tauri webviews use `tauri://localhost` as their origin, which was being blocked by CORS. Docs: [architecture](./architecture.md). Code: `src/config.ts`.
 

@@ -1,8 +1,8 @@
 ---
-Last updated: 2026-05-20
-Last change: Initial scaffold — repo hygiene, FGL renderer (v0), and CLI agent (v0)
+Last updated: 2026-06-03
+Last change: Migrated to pure Rust HTTP server - eliminated Node.js dependency
 Owner: @phildaponte
-Status: draft
+Status: current
 ---
 
 # seatfun-print-agent
@@ -33,17 +33,16 @@ It is the only software component that talks to the printer. The dashboard never
 
 ## Status
 
-- ✅ **v0.1.0 — Tauri Desktop App** (current). System tray, status/settings windows, pairing, auto-start, HTTP API for dashboard integration.
-- ⏳ **v0.2.0 — Bundled Node.js.** Remove Node.js installation requirement.
+- ✅ **v0.1.3 — Pure Rust Implementation** (current). Complete migration to native Rust HTTP server - **no Node.js required!**
+- ✅ **v0.1.0 — Tauri Desktop App**. System tray, status/settings windows, pairing, auto-start, HTTP API for dashboard integration.
 - ⏳ **v1.0.0 — Production Ready.** Code signing, auto-update, mDNS printer discovery.
 
 ## Requirements
 
 **Users need:**
-- **Node.js 20+** installed on their system ([download here](https://nodejs.org/))
 - macOS 10.13+ or Windows 10+
 
-**Note:** v0.2.0 will bundle Node.js to remove this requirement.
+**That's it!** No Node.js, Python, or other runtime dependencies. Just download and run.
 
 ## Install
 
@@ -74,22 +73,15 @@ The agent registers a launch-on-login entry and runs in the background after ins
 
 ## Develop
 
-Requires **Node 20+** and **Rust** (for Tauri).
+Requires **Rust** only (install from [rustup.rs](https://rustup.rs)).
 
 ```bash
 git clone git@github.com:phildaponte/seatfun-print-agent.git
 cd seatfun-print-agent
-pnpm install
 cp .env.example .env       # set PRINTER_IP, etc.
 
 # Run in development mode (with hot reload)
-pnpm tauri dev
-```
-
-Run the golden tests on the FGL renderer:
-
-```bash
-pnpm test
+cargo tauri dev
 ```
 
 Health check (while app is running):
@@ -101,29 +93,37 @@ curl http://127.0.0.1:9787/v1/health
 Build for production:
 
 ```bash
-pnpm tauri build
+cargo tauri build
 # Output: src-tauri/target/release/bundle/dmg/*.dmg (macOS)
 #         src-tauri/target/release/bundle/nsis/*.exe (Windows)
 ```
 
 For the full wire format see [`docs/protocol.md`](./docs/protocol.md).
 
-## Repo layout (planned)
+## Repo layout
 
 ```
 .
-├── src/
-│   ├── server/          HTTP server, route handlers, auth middleware
-│   ├── fgl/             FGL renderer (will move to @seatfun/fgl shared pkg)
-│   ├── printer/         TCP socket client + status parsing
-│   ├── pairing/         pairing handshake + keychain storage
-│   └── index.ts         entrypoint
-├── fixtures/            sample jobs + golden FGL output for tests
+├── src-tauri/
+│   ├── src/
+│   │   ├── server/          Rust HTTP server (Axum)
+│   │   │   ├── routes.rs    API endpoints
+│   │   │   ├── printer.rs   TCP client + probe
+│   │   │   ├── fgl.rs       FGL template renderer
+│   │   │   ├── pairing.rs   Keychain integration
+│   │   │   ├── config.rs    Environment config
+│   │   │   └── logger.rs    Structured logging
+│   │   ├── lib.rs           Tauri app + system tray
+│   │   └── main.rs          Entry point
+│   ├── Cargo.toml           Rust dependencies
+│   └── tauri.conf.json      Tauri configuration
+├── frontend/                HTML for tray windows
+├── fixtures/                Sample print jobs
 ├── docs/
-│   ├── architecture.md  internal structure
-│   ├── protocol.md      wire contract with the dashboard (frozen)
-│   └── distribution.md  build, sign, release, auto-update
-├── package.json
+│   ├── tauri-architecture.md  How the Rust app works (SOURCE OF TRUTH)
+│   ├── protocol.md            Wire contract with dashboard
+│   ├── distribution.md        Build, sign, release
+│   └── CHANGELOG.md           Version history
 └── README.md
 ```
 
@@ -161,9 +161,10 @@ Proprietary © Seatfun. Not for redistribution.
 
 ## Related
 
-- [`docs/architecture.md`](./docs/architecture.md) — how the agent is built internally.
+- [`docs/tauri-architecture.md`](./docs/tauri-architecture.md) — **SOURCE OF TRUTH** for how the Rust app works.
 - [`docs/protocol.md`](./docs/protocol.md) — wire contract with the dashboard. **Frozen** post-v1.
 - [`docs/distribution.md`](./docs/distribution.md) — build / sign / release.
+- [`docs/CHANGELOG.md`](./docs/CHANGELOG.md) — version history.
 - Dashboard side: `seatfun-dashboard/docs/05-features/box-office-printing.md`.
 - Architecture overview: `seatfun-dashboard/docs/01-architecture/print-agent.md`.
 - BOCA FGL46 reference: <https://www.bocasystems.com/documents/fgl46_rev16_7.pdf>.
