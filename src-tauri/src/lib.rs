@@ -108,7 +108,27 @@ pub fn run() {
       
       eprintln!("Using resource path: {:?}", resource_path);
       
-      let node_path = "node"; // Will use system Node.js
+      // Find Node.js - GUI apps don't inherit shell PATH, so check common locations
+      let node_path = if let Ok(output) = std::process::Command::new("which").arg("node").output() {
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+      } else {
+        // Fallback to common locations
+        let home = std::env::var("HOME").unwrap_or_default();
+        let nvm_path = format!("{}/.nvm/versions/node/v20.20.0/bin/node", home);
+        
+        let common_paths = vec![
+          "/usr/local/bin/node".to_string(),
+          "/opt/homebrew/bin/node".to_string(),
+          "/usr/bin/node".to_string(),
+          nvm_path,
+        ];
+        
+        common_paths.into_iter()
+          .find(|p| std::path::Path::new(p).exists())
+          .unwrap_or_else(|| "node".to_string())
+      };
+      
+      eprintln!("Found Node.js at: {}", node_path);
       
       // In dev mode, dist is in project root; in production, it's in resource dir
       let (dist_path, working_dir) = if cfg!(debug_assertions) {
@@ -122,18 +142,41 @@ pub fn run() {
         (up_dir.join("dist/index.js"), up_dir)
       };
 
+      eprintln!("Attempting to spawn Node.js:");
+      eprintln!("  node_path: {}", node_path);
+      eprintln!("  dist_path: {:?}", dist_path);
+      eprintln!("  working_dir: {:?}", working_dir);
+
       let child = Command::new(node_path)
         .arg(&dist_path)
         .current_dir(&working_dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .spawn();
 
       match child {
-        Ok(child) => {
+        Ok(mut child) => {
+          eprintln!("Node.js process started successfully!");
+          
+          // Read stderr in a separate thread to see errors
+          if let Some(stderr) = child.stderr.take() {
+            std::thread::spawn(move || {
+              use std::io::{BufRead, BufReader};
+              let reader = BufReader::new(stderr);
+              for line in reader.lines() {
+                if let Ok(line) = line {
+                  eprintln!("[Node.js stderr] {}", line);
+                }
+              }
+            });
+          }
+          
           // Store child process handle for cleanup
           app.manage(child);
         }
         Err(e) => {
-          eprintln!("Failed to start Node.js process: {}", e);
+          eprintln!("CRITICAL: Failed to start Node.js process: {}", e);
+          eprintln!("Make sure Node.js is installed and in PATH");
           // Don't crash the app if Node.js fails to start
           // The app will run but the HTTP server won't be available
         }

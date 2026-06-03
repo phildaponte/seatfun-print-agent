@@ -1,4 +1,12 @@
-import "dotenv/config";
+// Only load .env in development (when running via npm run dev)
+// In production (bundled app), environment variables are set by the system
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    await import("dotenv/config");
+  } catch (e) {
+    // dotenv not available in bundled app - that's fine
+  }
+}
 
 export interface AgentConfig {
   host: string;
