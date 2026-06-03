@@ -27,7 +27,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "dist",
+      "../dist",
       "../node_modules"
     ],
     "macOS": {
