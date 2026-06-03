@@ -111,32 +111,20 @@ pub fn run() {
       let node_path = "node"; // Will use system Node.js
       
       // In dev mode, dist is in project root; in production, it's in resource dir
-      let dist_path = if cfg!(debug_assertions) {
+      let (dist_path, working_dir) = if cfg!(debug_assertions) {
         // Dev mode: dist is in project root (parent of src-tauri)
-        resource_path.join("../../dist/index.js")
+        let project_root = resource_path.join("../..");
+        (project_root.join("dist/index.js"), project_root)
       } else {
-        // Production: dist is bundled in resource dir
-        resource_path.join("dist/index.js")
-      };
-
-      // Use the dist directory as current directory for Node.js
-      let dist_dir = if cfg!(debug_assertions) {
-        resource_path.join("../../dist")
-      } else {
-        resource_path.join("dist")
-      };
-
-      // Set NODE_PATH to find node_modules (in _up_ directory when bundled)
-      let node_path_env = if cfg!(debug_assertions) {
-        resource_path.join("../../node_modules").to_string_lossy().to_string()
-      } else {
-        resource_path.join("_up_/node_modules").to_string_lossy().to_string()
+        // Production: dist is bundled in _up_ subdirectory
+        // Run from _up_ so node_modules can be found naturally by ESM
+        let up_dir = resource_path.join("_up_");
+        (up_dir.join("dist/index.js"), up_dir)
       };
 
       let child = Command::new(node_path)
         .arg(&dist_path)
-        .current_dir(&dist_dir)
-        .env("NODE_PATH", &node_path_env)
+        .current_dir(&working_dir)
         .spawn();
 
       match child {

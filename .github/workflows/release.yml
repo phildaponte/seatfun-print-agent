@@ -11,8 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest]
-        include:
+        settings:
           - platform: macos-latest
             target: aarch64-apple-darwin
           - platform: macos-latest
@@ -20,7 +19,7 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.settings.platform }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +27,7 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.settings.target }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -55,16 +54,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Seatfun Print Agent v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
           tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.settings.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ matrix.target }}
+          name: ${{ matrix.settings.platform }}-${{ matrix.settings.target }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.settings.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.settings.target }}/release/bundle/nsis/*.exe
           if-no-files-found: ignore
 
   universal-macos:
