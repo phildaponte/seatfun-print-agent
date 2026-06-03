@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-05-22
-Last change: Documented v1-lite implementation — CORS middleware, printer probe, pairing/keychain, heartbeat scaffold, shared runPrintJob; macOS `security` CLI replaces keytar
+Last updated: 2026-06-02
+Last change: Documented BOCA Lemur FGL ticket body and tear-off stub layout
 Owner: @phildaponte
 Status: draft
 ---
@@ -56,7 +56,7 @@ The agent is a **single Node process** (v0) or a **Tauri main process + webview*
 
 ### `src/fgl/` (will graduate to `@seatfun/fgl`)
 
-- `template.ts` — the canonical 2" × 5.5" Lemur tear-stock layout. Pure function: `renderTicket(data) → string` of FGL.
+- `template.ts` — the canonical 2" x 5.5" Lemur tear-stock layout. Pure function: `renderTicket(data) -> string` of FGL. The printable design is composed across the feed axis as a landscape ticket: rows `0..820` are the main ticket body, row `825` is the dashed tear separator, and rows `840..1100` are the tear-off stub. The main body prints event name, admission type, price, optional seat details, a large QR code, venue, city/state, event date/time, and order id. The stub repeats a smaller QR code, admission type, price, event date/time, and order id.
 - `commands.ts` — typed builders for FGL primitives (`<RC#,#>`, `<F#>`, `<QR#>`, `<LOGO#>`, `<p>` for print, `<CAN>` for cancel).
 - `logo.ts` — converts `logo-black.png` → 1-bit BMP at build time. At runtime, the agent uploads it to printer flash on first connect via the FGL store-logo command and caches a "logo present" flag.
 - `__golden__/` — golden test fixtures. Each input JSON has a paired `.fgl` file; CI fails if the renderer drifts.

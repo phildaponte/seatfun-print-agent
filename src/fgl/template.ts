@@ -43,13 +43,11 @@ export function renderTicket(data: TicketRenderData): string {
   const t = (v: string | undefined) => toAscii(sanitizeText(v));
   const hasSeatInfo = Boolean(data.seat || data.row);
 
-  // Layout assumes a 2" × 5.5" tear-stock fed PORTRAIT on a Lemur-S:
+  // Layout assumes a 5" × 5.5" tear-stock fed PORTRAIT on a Lemur-S:
   //   - rows go 0..~1100 (the 5.5" feed-direction axis, leading edge prints first)
-  //   - cols go 0..~400  (the 2" head axis)
+  //   - cols go 0..~1000 (the 5" head axis, ~200 dots per inch)
   // The self-test reports "PRINT WIDTH 960" but that's the printer's MAX head
-  // width across all stocks; our 2" stock only uses cols 0..~400 of that.
-  // Confirmed empirically on 2026-05-21 (round 3 print): col 650 placed the QR
-  // off the stock and silently dropped it. All content stays within col 0..400.
+  // width across all stocks; our 5" stock uses cols 0..~1000 of that.
 
   const parts: string[] = [];
 
@@ -73,14 +71,14 @@ export function renderTicket(data: TicketRenderData): string {
   }
 
   // ── Price + event code ───────────────────────────────────────────────
-  parts.push(rc(310, 20) + font(2) + `$${t(data.price)}    CODE: ${t(data.event_code)}`);
+  parts.push(rc(510, 20) + font(2) + `${t(data.price)}    CODE: ${t(data.event_code)}`);
 
   // ── QR code ──────────────────────────────────────────────────────────
-  // Module size 8 × ~21 modules = ~170 dots wide on a ~400-wide stock.
-  // Moved to row 350, col 150 for better centering.
+  // Module size 8 × ~21 modules = ~170 dots wide on a ~1000-wide stock.
+  // Positioned at row 150, col 1000 to align left of tear-off stub.
   // QRV7 sets QR version to 7 (default density, up to 178 alphanumeric chars).
   parts.push(qrv(7));
-  parts.push(rc(350, 150) + qr(8, data.qr_payload));
+  parts.push(rc(150, 1000) + qr(8, data.qr_payload));
 
   // ── Footer ───────────────────────────────────────────────────────────
   // Pushed past the QR (which ends ~row 570) but well within the safe
