@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-06-02
-Last change: Documented BOCA Lemur FGL ticket body and tear-off stub layout
+Last updated: 2026-06-03
+Last change: Migrated tray windows to Tauri asset protocol
 Owner: @phildaponte
 Status: draft
 ---
@@ -13,7 +13,9 @@ For the **external** architecture (how the agent fits between the dashboard and 
 
 ## Process model
 
-The agent is a **single Node process** (v0) or a **Tauri main process + webview** (v1). No worker threads in v0 — print jobs are I/O bound (HTTP in, TCP out) and Node's event loop handles them fine.
+The agent is a **Tauri main process + Node.js sidecar**. The Tauri process manages the system tray and tray windows (`status.html`, `settings.html`), while the Node.js sidecar runs the HTTP server on `127.0.0.1:9787`. No worker threads — print jobs are I/O bound (HTTP in, TCP out) and Node's event loop handles them fine.
+
+**Tray windows** are loaded via `WebviewUrl::App` using Tauri's native asset protocol, which serves HTML files directly from the bundled resources. This eliminates path resolution issues and file system access from Node.js. The HTML files call the Node.js HTTP server's `/v1/*` API endpoints for data (e.g., `GET /v1/settings`, `POST /v1/settings`).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -47,7 +49,7 @@ The agent is a **single Node process** (v0) or a **Tauri main process + webview*
 
 ### `src/server/`
 
-- `http.ts` — boots a Node `http.Server` bound to `127.0.0.1` only (never `0.0.0.0` — the agent must not be reachable from the LAN, only from the same machine). Holds the single route map (`ROUTES`) with per-route `auth` flags and dispatches via `switch`.
+- `http.ts` — boots a Node `http.Server` bound to `127.0.0.1` only (never `0.0.0.0` — the agent must not be reachable from the LAN, only from the same machine). Holds the single route map (`ROUTES`) with per-route `auth` flags and dispatches via `switch`. **Note:** The `GET /status.html` and `GET /settings.html` routes were removed in v0.1.0 — these files are now served by Tauri's asset protocol, not the HTTP server.
 - `routes/` — one file per endpoint (`health.ts`, `pair.ts`, `status.ts`, `print.ts`, `test-print.ts`). See `protocol.md` for the contract.
 - `jobs/runPrintJob.ts` — shared print-job runner used by both `/v1/print` and `/v1/test-print` so they share identical batch semantics (sequential render → TCP write → 50 ms gap → next).
 - `middleware/auth.ts` — `verifyBearer(req, expectedToken)` does a constant-time compare against the token in pairing state. Returns `not_paired` when no token has been stored yet so the dashboard can branch on the CTA.

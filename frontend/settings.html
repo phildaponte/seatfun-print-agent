@@ -101,20 +101,11 @@
   </div>
 
   <script>
-    const { invoke } = window.__TAURI__.core;
-    const { save } = window.__TAURI__.dialog;
-    const { readTextFile, writeTextFile, exists } = window.__TAURI__.fs;
-
     async function loadSettings() {
       try {
-        const configPath = '.env';
-        if (await exists(configPath)) {
-          const content = await readTextFile(configPath);
-          const match = content.match(/PRINTER_IP=(.+)/);
-          if (match) {
-            document.getElementById('printerIp').value = match[1].trim();
-          }
-        }
+        const response = await fetch('http://127.0.0.1:9787/v1/settings');
+        const data = await response.json();
+        document.getElementById('printerIp').value = data.printer_ip || '';
       } catch (error) {
         console.error('Failed to load settings:', error);
       }
@@ -124,30 +115,17 @@
       const printerIp = document.getElementById('printerIp').value.trim();
       
       try {
-        let content = '';
-        const configPath = '.env';
-        
-        if (await exists(configPath)) {
-          content = await readTextFile(configPath);
-        }
-
-        // Update or add PRINTER_IP
-        const lines = content.split('\n');
-        let found = false;
-        const newLines = lines.map(line => {
-          if (line.startsWith('PRINTER_IP=')) {
-            found = true;
-            return `PRINTER_IP=${printerIp}`;
-          }
-          return line;
+        const response = await fetch('http://127.0.0.1:9787/v1/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ printer_ip: printerIp })
         });
-
-        if (!found && printerIp) {
-          newLines.push(`PRINTER_IP=${printerIp}`);
+        
+        if (response.ok) {
+          alert('Settings saved! Restart the agent to apply changes.');
+        } else {
+          alert('Failed to save settings.');
         }
-
-        await writeTextFile(configPath, newLines.join('\n'));
-        alert('Settings saved! Restart the agent to apply changes.');
       } catch (error) {
         console.error('Failed to save settings:', error);
         alert('Failed to save settings. Check console for details.');

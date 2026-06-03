@@ -87,14 +87,47 @@ jobs:
 
       - name: Create universal DMG
         run: |
-          # This is a placeholder - actual universal binary creation requires
-          # additional tooling. For now, we'll upload both architectures separately.
-          echo "Universal binary creation requires additional setup"
-          echo "See docs/distribution.md for the complete approach"
+          # Find the DMG files
+          ARM64_DMG=$(find artifacts/arm64 -name "*.dmg" | head -1)
+          X64_DMG=$(find artifacts/x64 -name "*.dmg" | head -1)
+          
+          if [ -z "$ARM64_DMG" ] || [ -z "$X64_DMG" ]; then
+            echo "Error: Could not find DMG files"
+            exit 1
+          fi
+          
+          echo "Found arm64 DMG: $ARM64_DMG"
+          echo "Found x64 DMG: $X64_DMG"
+          
+          # Mount both DMGs
+          ARM64_MOUNT=$(hdiutil attach "$ARM64_DMG" | grep /Volumes | awk '{print $3}')
+          X64_MOUNT=$(hdiutil attach "$X64_DMG" | grep /Volumes | awk '{print $3}')
+          
+          echo "Mounted arm64 at: $ARM64_MOUNT"
+          echo "Mounted x64 at: $X64_MOUNT"
+          
+          # Copy arm64 app to working directory
+          cp -R "$ARM64_MOUNT/SeatfunPrintAgent.app" .
+          
+          # Create universal binary using lipo
+          lipo -create \
+            "$ARM64_MOUNT/SeatfunPrintAgent.app/Contents/MacOS/SeatfunPrintAgent" \
+            "$X64_MOUNT/SeatfunPrintAgent.app/Contents/MacOS/SeatfunPrintAgent" \
+            -output "SeatfunPrintAgent.app/Contents/MacOS/SeatfunPrintAgent"
+          
+          # Update app to universal
+          /usr/bin/plutil -replace CFBundleExecutable -string "SeatfunPrintAgent" SeatfunPrintAgent.app/Contents/Info.plist
+          
+          # Unmount DMGs
+          hdiutil detach "$ARM64_MOUNT"
+          hdiutil detach "$X64_MOUNT"
+          
+          # Create universal DMG
+          hdiutil create -volname "SeatfunPrintAgent" -srcfolder SeatfunPrintAgent.app -ov -format UDZO "SeatfunPrintAgent_universal.dmg"
 
       - name: Upload universal artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-universal
-          path: artifacts/**/*.dmg
+          path: SeatfunPrintAgent_universal.dmg
           if-no-files-found: ignore

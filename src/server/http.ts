@@ -10,6 +10,7 @@ import { handlePrint } from "./routes/print.js";
 import { handleStatus } from "./routes/status.js";
 import { handleTestPrint } from "./routes/test-print.js";
 import { handlePair } from "./routes/pair.js";
+import { handleGetSettings, handlePostSettings } from "./routes/settings.js";
 import { verifyBearer } from "./middleware/auth.js";
 import { applyCorsHeaders, handlePreflight, type CorsConfig } from "./middleware/cors.js";
 
@@ -34,6 +35,8 @@ const ROUTES: Array<{ key: string; auth: boolean }> = [
   { key: "GET /v1/status", auth: true },
   { key: "POST /v1/print", auth: true },
   { key: "POST /v1/test-print", auth: true },
+  { key: "GET /v1/settings", auth: false },
+  { key: "POST /v1/settings", auth: false },
 ];
 
 export function createServer(deps: ServerDeps): http.Server {
@@ -99,6 +102,12 @@ export function createServer(deps: ServerDeps): http.Server {
           return;
         case "POST /v1/test-print":
           await handleTestPrint(deps, sendJson, sendError, requestId);
+          return;
+        case "GET /v1/settings":
+          await handleGetSettings(deps, sendJson);
+          return;
+        case "POST /v1/settings":
+          await handlePostSettings(deps, req, sendJson, sendError);
           return;
         default:
           sendError(404, "not_found", `Unknown route: ${route}`);

@@ -1,6 +1,6 @@
 ---
-Last updated: 2026-06-02
-Last change: /v1/health now returns a non-secret `device` block (device_id/organizer_id/device_name) for multi-station loopback correctness
+Last updated: 2026-06-03
+Last change: Removed HTML static file routes (now served via Tauri asset protocol)
 Owner: @phildaponte
 Status: draft
 ---
@@ -20,6 +20,8 @@ Last protocol version: **v1** (draft). Status: pre-freeze — fields may still c
 | `GET /v1/status` | ✅ | `reachable` only; flags/model/firmware/serial still `null` / `false`. |
 | `POST /v1/print` | ✅ | Unchanged from v0. |
 | `POST /v1/test-print` | ✅ | Prints `fixtures/sample-job.json` through `runPrintJob`. |
+| `GET /v1/settings` | ✅ | Returns current `printer_ip` from config. No auth required. |
+| `POST /v1/settings` | ✅ | Saves `printer_ip` to `.env` file. No auth required. |
 | `POST /v1/cancel` | ❌ | Deferred until a queue exists. |
 | `POST /v1/printer/configure` | ❌ | Deferred; set via `PRINTER_IP` env for now. |
 | `POST /v1/heartbeat` (outbound) | 🚧 | Scaffolded but disabled by default — dashboard polls `/v1/status` instead. |
@@ -56,6 +58,12 @@ The dashboard runs on `https://app.seatfun.com`; the agent runs on `http://127.0
 **Bearer in the browser:**
 
 The dashboard fetches the device's bearer from its own Vercel API (`GET /api/box-office/agent-token`, session-gated) on box-office page load, holds it in React state (memory only — never `localStorage` / `sessionStorage`), and includes it on every agent call. The token is never persisted in the browser. Rationale: agent + dashboard are mutually trusted via the pairing handshake, but the browser session is the weakest link — keeping the token in memory limits exposure to the page lifetime.
+
+## Tray window UI files
+
+The agent's tray windows (`status.html` and `settings.html`) are **not served via the HTTP server**. They are loaded directly by Tauri using `WebviewUrl::App`, which serves files from the bundled resources via Tauri's native asset protocol. This eliminates path resolution issues and file system access from Node.js in production bundles.
+
+The HTTP server only provides the `/v1/*` API endpoints documented below. The HTML files are bundled in `tauri.conf.json` resources and served by Tauri's webview loader.
 
 ## Endpoints
 
@@ -297,6 +305,73 @@ Content-Type: application/json
 No request body required. The agent renders the bundled `fixtures/sample-job.json` and stamps a fresh `job_id` of the form `test_<unix-ms>`.
 
 Response: identical shape to `/v1/print` (single result in `results[]`).
+
+, if so how can I test? Can you ran these command for me and install the app on### `GET /v1/settings`
+
+Returns the current printer configuration. **No auth required.** Used by the local settings UI to display the configured printer IP.
+
+```http
+GET /v1/settings HTTP/1.1
+```
+
+Response:
+
+```json
+{
+  "printer_ip": "192.168.1.47"
+}
+```
+
+- `printer_ip` — The currently configured printer IP address, or empty string if not configured.
+
+**Browser URL (test):**
+```
+http://127.0.0.1:9787/v1/settings
+```
+
+**cURL:**
+```bash
+curl http://127.0.0.1:9787/v1/settings
+```
+
+**Frontend callers:** `src-tauri/settings.html`
+
+### `POST /v1/settings`
+
+Updates the printer configuration and persists it to the `.env` file. **No auth required.** Used by the local settings UI to save the printer IP. Changes take effect after agent restart.
+
+```http
+POST /v1/settings HTTP/1.1
+Content-Type: application/json
+
+{
+  "printer_ip": "192.168.1.47"
+}
+```
+
+- `printer_ip` — required. The printer IP address to save. Pass empty string to clear the configuration.
+
+Response (200):
+
+```json
+{
+  "success": true
+}
+```
+
+Errors:
+
+- `400 invalid_request` — body missing `printer_ip` field or malformed JSON.
+- `500 internal_error` — failed to write to `.env` file.
+
+**cURL:**
+```bash
+curl -X POST http://127.0.0.1:9787/v1/settings \
+  -H "Content-Type: application/json" \
+  -d '{"printer_ip": "192.168.1.47"}'
+```
+
+**Frontend callers:** `src-tauri/settings.html`
 
 ### `POST /v1/printer/configure` 🔒
 

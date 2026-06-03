@@ -33,16 +33,32 @@ It is the only software component that talks to the printer. The dashboard never
 
 ## Status
 
-- 🚧 **v0 — CLI** (current target). Plain Node, no UI, config file, prints from a single endpoint. Built to run the first end-to-end FGL spike with the dashboard.
-- ⏳ **v1 — Tauri.** Settings window, pairing UX, system tray, auto-update, OS-keychain token storage.
-- ⏳ **v2 — Polish.** mDNS printer auto-discovery, offline job queue, multi-printer.
+- ✅ **v0.1.0 — Tauri Desktop App** (current). System tray, status/settings windows, pairing, auto-start, HTTP API for dashboard integration.
+- ⏳ **v0.2.0 — Bundled Node.js.** Remove Node.js installation requirement.
+- ⏳ **v1.0.0 — Production Ready.** Code signing, auto-update, mDNS printer discovery.
 
-## Install (v1, planned)
+## Requirements
 
-- macOS: download `SeatfunPrintAgent-<version>.dmg`, drag to Applications, open.
-- Windows: download `SeatfunPrintAgent-<version>.exe`, run installer.
+**Users need:**
+- **Node.js 20+** installed on their system ([download here](https://nodejs.org/))
+- macOS 10.13+ or Windows 10+
 
-The agent registers a launch-on-login entry, opens a settings window on first run, and adds a tray/menu-bar icon. After pairing it runs in the background.
+**Note:** v0.2.0 will bundle Node.js to remove this requirement.
+
+## Install
+
+### macOS
+1. Download `SeatfunPrintAgent_0.1.0_aarch64.dmg` (Apple Silicon) or `SeatfunPrintAgent_0.1.0_x86_64.dmg` (Intel) from [GitHub Releases](https://github.com/phildaponte/seatfun-print-agent/releases)
+2. Open the DMG and drag `SeatfunPrintAgent.app` to Applications
+3. Open the app - a tray icon will appear in your menu bar
+4. Right-click the tray icon → **Show Settings** to configure printer IP
+
+### Windows
+1. Download `SeatfunPrintAgent_0.1.0_x64.exe` from [GitHub Releases](https://github.com/phildaponte/seatfun-print-agent/releases)
+2. Run the installer
+3. The app will start automatically and appear in your system tray
+
+The agent registers a launch-on-login entry and runs in the background after installation.
 
 ## First-run flow
 

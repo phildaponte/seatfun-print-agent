@@ -25,7 +25,11 @@ function optional(name: string, fallback: string): string {
   return v && v.trim() !== "" ? v : fallback;
 }
 
-const DEFAULT_ALLOWED_ORIGINS = ["https://app.seatfun.com", "http://localhost:3000"];
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://app.seatfun.com",
+  "http://localhost:3000",
+  "tauri://localhost", // Tauri webview origin for tray windows
+];
 
 export function loadConfig(): AgentConfig {
   const rawOrigins = process.env["SEATFUN_ALLOWED_ORIGINS"];
