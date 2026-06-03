@@ -3,25 +3,13 @@ use std::sync::{Arc, Mutex};
 use sha2::{Sha256, Digest};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PairingMetadata {
     pub device_id: Option<String>,
     pub organizer_id: Option<String>,
     pub organizer_name: Option<String>,
     pub device_name: Option<String>,
     pub paired_at: Option<String>,
-}
-
-impl Default for PairingMetadata {
-    fn default() -> Self {
-        Self {
-            device_id: None,
-            organizer_id: None,
-            organizer_name: None,
-            device_name: None,
-            paired_at: None,
-        }
-    }
 }
 
 pub struct PairingState {

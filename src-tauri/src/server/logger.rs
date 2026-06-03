@@ -82,6 +82,7 @@ impl Logger {
         }
     }
 
+    #[allow(dead_code)]
     pub fn debug(&self, msg: &str, data: Option<Value>) {
         self.log(LogLevel::Debug, msg, data);
     }

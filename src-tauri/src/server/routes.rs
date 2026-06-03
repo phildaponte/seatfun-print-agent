@@ -121,6 +121,7 @@ pub async fn status(
 
 #[derive(Deserialize)]
 pub struct PairRequest {
+    #[allow(dead_code)]
     code: String,
     #[serde(default)]
     device_id: Option<String>,
@@ -357,7 +358,7 @@ pub async fn post_settings(
         lines.push(format!("PRINTER_IP={}", body.printer_ip));
     }
 
-    while lines.last().map_or(false, |l| l.trim().is_empty()) {
+    while matches!(lines.last(), Some(l) if l.trim().is_empty()) {
         lines.pop();
     }
 

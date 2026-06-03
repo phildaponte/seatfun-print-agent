@@ -38,6 +38,7 @@ fn qrv(version: u8) -> String {
     format!("<QRV{}>", version)
 }
 
+#[allow(clippy::collapsible_str_replace)]
 fn to_ascii(input: &str) -> String {
     let s = diacritics::remove_diacritics(input);
     s.replace('\u{2014}', "-")
