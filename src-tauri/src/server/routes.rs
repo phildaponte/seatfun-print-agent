@@ -336,9 +336,13 @@ pub async fn post_settings(
     State(state): State<AppState>,
     Json(body): Json<SettingsRequest>,
 ) -> Result<impl IntoResponse, Response> {
-    let env_path = std::env::current_dir()
-        .unwrap_or_default()
-        .join(".env");
+    // Use app config directory instead of current_dir (which doesn't work in bundled apps)
+    let config_dir = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("SeatfunPrintAgent");
+    
+    tokio::fs::create_dir_all(&config_dir).await.ok();
+    let env_path = config_dir.join("settings.env");
 
     let content = tokio::fs::read_to_string(&env_path)
         .await

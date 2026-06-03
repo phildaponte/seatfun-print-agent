@@ -49,7 +49,10 @@ impl Config {
             config.port = port.parse().unwrap_or(9787);
         }
         config.env_token = env::var("SEATFUN_AGENT_TOKEN").ok();
-        config.printer_ip = env::var("PRINTER_IP").ok();
+        
+        // Load printer_ip from settings file first, then override with env var if present
+        config.printer_ip = Self::load_printer_ip_from_file()
+            .or_else(|| env::var("PRINTER_IP").ok());
         if let Ok(port) = env::var("PRINTER_PORT") {
             config.printer_port = port.parse().unwrap_or(9100);
         }
@@ -65,5 +68,24 @@ impl Config {
         }
         
         config
+    }
+    
+    fn load_printer_ip_from_file() -> Option<String> {
+        let config_dir = dirs::config_dir()?
+            .join("SeatfunPrintAgent");
+        let settings_path = config_dir.join("settings.env");
+        
+        let content = std::fs::read_to_string(settings_path).ok()?;
+        
+        for line in content.lines() {
+            if let Some(ip) = line.strip_prefix("PRINTER_IP=") {
+                let trimmed = ip.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        
+        None
     }
 }
