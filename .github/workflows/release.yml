@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build TypeScript
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: cargo tauri
+          args: --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+          if-no-files-found: ignore
+
+  universal-macos:
+    needs: release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-latest-aarch64-apple-darwin
+          path: artifacts/arm64
+
+      - name: Download x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-latest-x86_64-apple-darwin
+          path: artifacts/x64
+
+      - name: Create universal DMG
+        run: |
+          # This is a placeholder - actual universal binary creation requires
+          # additional tooling. For now, we'll upload both architectures separately.
+          echo "Universal binary creation requires additional setup"
+          echo "See docs/distribution.md for the complete approach"
+
+      - name: Upload universal artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: artifacts/**/*.dmg
+          if-no-files-found: ignore

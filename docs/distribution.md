@@ -1,8 +1,8 @@
 ---
-Last updated: 2026-05-20
-Last change: Corrected cost numbers (Apple Developer already covered; Windows cert is the only real recurring cost); affirmed Windows/macOS shipping parity
+Last updated: 2026-06-03
+Last change: Updated status to current after Tauri migration implementation
 Owner: @phildaponte
-Status: draft
+Status: current
 ---
 
 # Distribution — seatfun-print-agent

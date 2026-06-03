@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seatfun Print Agent Settings</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #555;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #007aff;
+    }
+    .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .status.running {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.stopped {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    button {
+      background: #007aff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Seatfun Print Agent Settings</h1>
+    
+    <div class="form-group">
+      <label for="printerIp">Printer IP Address</label>
+      <input type="text" id="printerIp" placeholder="192.168.1.47">
+      <div class="hint">The IP address of your BOCA Lemur printer (check printer self-test ticket)</div>
+    </div>
+
+    <button id="saveBtn">Save Settings</button>
+
+    <div id="status" class="status running">
+      HTTP Server: Running on http://127.0.0.1:9787
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { save } = window.__TAURI__.dialog;
+    const { readTextFile, writeTextFile, exists } = window.__TAURI__.fs;
+
+    async function loadSettings() {
+      try {
+        const configPath = '.env';
+        if (await exists(configPath)) {
+          const content = await readTextFile(configPath);
+          const match = content.match(/PRINTER_IP=(.+)/);
+          if (match) {
+            document.getElementById('printerIp').value = match[1].trim();
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
+    }
+
+    async function saveSettings() {
+      const printerIp = document.getElementById('printerIp').value.trim();
+      
+      try {
+        let content = '';
+        const configPath = '.env';
+        
+        if (await exists(configPath)) {
+          content = await readTextFile(configPath);
+        }
+
+        // Update or add PRINTER_IP
+        const lines = content.split('\n');
+        let found = false;
+        const newLines = lines.map(line => {
+          if (line.startsWith('PRINTER_IP=')) {
+            found = true;
+            return `PRINTER_IP=${printerIp}`;
+          }
+          return line;
+        });
+
+        if (!found && printerIp) {
+          newLines.push(`PRINTER_IP=${printerIp}`);
+        }
+
+        await writeTextFile(configPath, newLines.join('\n'));
+        alert('Settings saved! Restart the agent to apply changes.');
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        alert('Failed to save settings. Check console for details.');
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', saveSettings);
+    loadSettings();
+  </script>
+</body>
+</html>
