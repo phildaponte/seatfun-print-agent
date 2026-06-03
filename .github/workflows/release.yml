@@ -32,26 +32,6 @@ jobs:
         with:
           target: ${{ matrix.settings.target }}
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build TypeScript
-        run: pnpm build
-
-      # Temporarily disabled - golden tests need updating
-      # - name: Run tests
-      #   run: pnpm test
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -62,7 +42,6 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
-          tauriScript: pnpm tauri
           args: --target ${{ matrix.settings.target }}
 
       - name: Upload artifacts

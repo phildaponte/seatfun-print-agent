@@ -5,7 +5,7 @@
   "identifier": "com.seatfun.print-agent",
   "build": {
     "beforeDevCommand": "",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "",
     "frontendDist": "../frontend",
     "devUrl": "http://localhost:1420"
   },
@@ -27,7 +27,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../dist"
+      "../fixtures"
     ],
     "macOS": {
       "minimumSystemVersion": "10.13",
